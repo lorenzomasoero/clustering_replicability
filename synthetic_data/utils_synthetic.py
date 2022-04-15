@@ -48,6 +48,212 @@ METRIC = 'euclidean'
 AFFINITY = 'euclidean'
 LINKAGE = 'complete'
 
+def prediction_strength(data, method_dict):
+    
+    train_set, test_set = random_splitting(data, 0.5)
+    true_labels, predicted_labels = fit_clustering(train_set, test_set, method_dict)
+    
+    # co-clustering occurrences
+    overlap_size = np.zeros(len(np.unique(true_labels)))
+    for c, class_label in enumerate(np.unique(true_labels)): # true test set labels
+        overlap = 0
+        count = 0
+        idx_true = np.where(true_labels == class_label)[0]
+        
+        for ii, i in enumerate(idx_true):
+            for jj, j in enumerate(idx_true[ii:]):
+                overlap += predicted_labels[i] == predicted_labels[j]
+                count+=1
+        overlap_size[c] = overlap/count
+    #print(overlap_size)
+    return min(overlap_size)
+        
+
+def igp(data, method_dict):
+    
+    true_labels, predicted_labels = fit_clustering(data, data, method_dict) # test set labels and predicted labels
+    igp_score = np.zeros(len(np.unique(true_labels))) # empty vector for scores
+    nbrs = NearestNeighbors(n_neighbors=2, algorithm='ball_tree').fit(data) # find nearest neighbors
+    distances, nearest_neighbor_idx = nbrs.kneighbors(data)
+ 
+    for c, class_label in enumerate(np.unique(true_labels)): # true test set labels
+        
+        idx_true = np.where(true_labels == class_label)[0]
+        overlap = [true_labels[i] == true_labels[nearest_neighbor_idx[i,1]] for i in idx_true]
+        igp_score[c] = np.sum(overlap)/len(overlap)
+        
+    return igp_score, true_labels
+
+def is_subset(list_one, list_two):
+    '''
+        Input: 
+            list_one <list>
+            list_two <list>
+        Output:
+            bool, equal to 1 if list_one is a subset of list_two
+    '''
+    return len(np.intersect1d(list_one, list_two)) == len(list_one)
+
+def jaccard_coefficient(list_one, list_two):
+    '''
+        Input: 
+            list_one <list>
+            list_two <list>
+        Output:
+            bool, equal to 1 if list_one is a subset of list_two
+    '''
+    return len(np.intersect1d(list_one, list_two))/len(set(list(list_one)+list(list_two)))
+
+def smolkin_inclusion(data, method_dict, alpha_fraction = .5, metric = is_subset, num_boots = 100):
+    
+    '''
+        Input: 
+            data <array> of shape N, D where D is the dimensionality of the data
+            method_dict <dictionary>
+            alpha_fraction <float> in (0,1)
+            metric <function>
+            num_boots <int>
+        Output:
+            score <array> shape B, K - inclusion score proposed by Smolkin
+    '''
+    
+    N,D = data.shape
+    labels = repro_score(data, data, method_dict)[2]
+    K = len(set(labels))
+    score = np.zeros([num_boots,K])
+    groups = [np.where(labels == k)[0] for k in range(K)]
+    
+    for b in tqdm_notebook(range(num_boots)):
+        idx = np.random.choice(D, max(2,int(alpha_fraction*D)), replace = False)
+        new_labels = repro_score(data[:,idx], data[:,idx], method_dict)[2]
+        K_new = len(set(new_labels))
+        new_groups = [np.where(new_labels == j)[0] for j in range(K_new)]
+        for k in range(K):
+            score[b,k] = np.sum([metric(groups[k], new_groups[k_prime]) for k_prime in range(K_new)])>=1
+    
+    return score, labels
+
+def r_d_index(data, method_dict, variance_error_term, num_boots = 100):
+    
+    '''
+        Input: 
+            data <array> of shape N, D where D is the dimensionality of the data
+            method_dict <dictionary>
+            variance_error_term <float> in R+
+            metric <function>
+            num_boots <int>
+        Output:
+            score_r <array> shape B, K 
+            score_d <array> shape B, K 
+            labels <array> shape N
+    '''
+    
+    N,D = data.shape # N: number of datapoints; D: dimension
+    labels = repro_score(data, data, method_dict)[2] # original clusters labels
+    K = len(set(labels)) # number of clusters in original clustering
+    score_r = np.zeros([num_boots,K]) # empty array for score results
+    score_d = np.zeros([num_boots,K]) # empty array for score results
+
+    groups = [np.where(labels == k)[0] for k in range(K)] # clusters
+    number_of_pairs = [spb(len(g),2) for g in groups] # list of length K; k-th entry is # pairs of points in k-th group
+    
+    for b in tqdm_notebook(range(num_boots)):
+        new_data = data + np.random.multivariate_normal(np.zeros(D), variance_error_term*np.eye(D), size = N) # perturbed data
+        new_labels = repro_score(new_data, new_data, method_dict)[2] # new clustering
+        K_new = len(set(new_labels)) # new number of labels
+        new_groups = [np.where(new_labels == j)[0] for j in range(K_new)] # new clusters
+        for k in range(K): # for every old cluster
+            
+            size_intersections = [len(np.intersect1d(groups[k], new_groups[j])) for j in range(K_new)]
+            paired_together = np.sum([spb(size_intersection, 2) for size_intersection in size_intersections])
+            score_r[b,k] = paired_together/number_of_pairs[k] # fraction of points clustered together in k-th cluster of data also clustered together in new_data
+            
+            highest_overlap_index = np.argmax(size_intersections)
+            score_d[b,k] = len(groups[k]) + len(new_groups[highest_overlap_index]) - 2 * size_intersections[highest_overlap_index] # number of deletions and additions in highest overlap group
+    return score_r, score_d, labels
+
+
+def make_distance_empirical_cdf(index, nn_dists_array):
+    '''
+    Input:
+        index <int> base dataset index
+        nn_dists_array <array> array of distribution of nearest neighbor in each bootstrap dataset
+    '''
+    
+    B, N = nn_dists_array.shape
+    
+    def distance(x):
+        '''
+        Input:
+            x <array> datapoint
+        Output
+            distance <function> distance function 
+        '''
+        score = np.sum(nn_dists_array <= x, axis = 1)/N
+        score_0 = score[index]
+        score_1 = (score.sum()-score_0)/(B-1)
+        dist = (score_1-score_0)**2
+        return dist
+    
+    return distance
+
+def draw_gaussian_mixture_model(N, D, K, pis, mus, sigmas, seed = 0):
+    '''
+    Input:
+        N <int> number of datapoints
+        D <int> dimension
+        K <int> number of components
+        pis <array> probability weights per component
+        mus <array> shape K,D centroids
+        sigmas <array> shape K,D,D covariance matrices
+        seed <int> pseudo RNG seed
+    Output
+        data <array> shape N, D
+        labels <array> shape N - component belonging
+    '''
+    np.random.seed(seed)
+    data = np.zeros([N,D])
+    N_ks = np.zeros(K)
+    N_total = 0
+    labels = np.zeros(N)
+    for p, pi in enumerate(pis[:-1]):
+        #print(pi)
+        if N_total < N:
+            #print(p)
+            N_k = np.random.binomial(N, pi)
+            #print(N_k)
+            N_ks[p] = N_k
+            if N_total+N_k>N:
+                N_k = N-N_total
+            sample = np.random.multivariate_normal(mean = mus[p], cov = sigmas[p], size = N_k)
+            data[N_total:N_total+N_k] = sample
+            labels[N_total:N_total+N_k] = p
+            N_total+=N_k
+    if N_total<N:
+        N_k = N-N_total
+        data[N_total:] = np.random.multivariate_normal(mean = mus[-1], cov = sigmas[-1], size = N_k)
+        N_ks[-1] = N_k
+        labels[N_total:N_total+N_k] = K-1
+    return data, labels.astype(int)
+
+def generate_set(indices, centroids, sigma, seed = 0):
+    
+    '''
+    Input:
+        indices : array of ints (class assignments)
+        centroids : array  of means
+        sigma : array of covariance matrices
+    Output :
+        dataset : array of points
+    '''
+    
+    n_points, d = len(indices), np.shape(centroids)[-1]
+    dataset = np.zeros([n_points, d])
+
+    for n in range(n_points):
+        dataset[n] = np.random.multivariate_normal(centroids[indices[n]], sigma * np.eye(d))
+    return dataset
+
 
 def repro_plot_all(train_set, test_set, train_point_ls, block_train_ls, num_clusters, num_boot, boot_size, markers, save, colorbar):
     
@@ -146,25 +352,6 @@ def shrink_(list_of_values, factor):
     min_, max_ = min(list_of_values), max(list_of_values)
     percentage_ = list_of_values/max_
     return list_of_values*factor**2*percentage_
-
-
-def generate_set(indices, centroids, sigma):
-    
-    '''
-    Input:
-        indices : array of ints (class assignments)
-        centroids : array  of means
-        sigma : array of covariance matrices
-    Output :
-        dataset : array of points
-    '''
-    
-    n_points, d = len(indices), np.shape(centroids)[-1]
-    dataset = np.zeros([n_points, d])
-
-    for n in range(n_points):
-        dataset[n] = np.random.multivariate_normal(centroids[indices[n]], sigma * np.eye(d))
-    return dataset
 
 
 def reproducibility_algo_individual(datasets, special_point, n_clusters, num_boot, boot_size, algorithm):
