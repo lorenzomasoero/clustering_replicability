@@ -532,11 +532,11 @@ def plot_synth_1(results_ex_1, methods_list, dataset_ids, lengths_ls, true_k, sa
         plt.xticks(range(len_k)[::s],range(2,len_k+2)[::s])
         if d_ == 0:
             plt.title('AMI', fontsize = 60, y  =1.02)
-        if d_ == 0:
-            plt.legend(fontsize = 35, loc = 'lower right', ncol = 2)
+#         if d_ == 0:
+#             plt.legend(fontsize = 35, loc = 'lower right', ncol = 2)
         if d_ == len(dataset_ids)-1:
             
-#             plt.legend(loc = 'lower right', fontsize = 25)
+            plt.legend(loc = 'lower right', fontsize = 25, ncol=3)
             plt.xlabel(r'Number of clusters', fontsize = 40)
     plt.tight_layout()
     if save != False:
