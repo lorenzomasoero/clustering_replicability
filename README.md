@@ -41,11 +41,12 @@ The real data used can be found in `synthetic_data/r_data`, where the Mainz, Tra
 
 # Fitting
 
-In `Cancer/`, `gnomAD/` and `Synthetic/` you will find `Fit.ipynb`, an iPythonNotebook which contains all the code needed in order to fit the experiments and save the data necessary to then reproduce the plots. Notice: `Synthetic/Fit.ipynb` also contains code to produce figures for the syntetic data. The relevant functions called to fit the methods can be found in the `utils/` folder.
+In both `synthetic_data/` and `real_data/` the iPython notebook `Fit.ipynb` contains all the code needed in order to fit the experiments and save the data necessary to then reproduce the plots in the main text.
 
 # Plotting
 
-In `Cancer/` and `gnomAD/` you will find `Plots.ipynb`, an iPythonNotebook which contains all the code needed in order to produce the plots displayed in the paper.
-* `Cancer/Plots.ipynb` reproduces in the main text (Figures 1 -- 5).
-* `Synthetic/Fit.ipynb` reproduces in Appendices F, G (Figures 6 -- 20).
-* `gnomAD/Plots.ipynb` reproduces in Appendix H (Figures 21 -- 38).
+In both `synthetic_data/` and `real_data/` the iPython notebook `Plots.ipynb` contains all the code needed in order to reproduce the plots in the main text. The intermediary files accessed are stored in the `Results/` folder.
+
+# Appendix
+
+To replicate the experiments in the Appendix, run the `synthetic_data/Appendix_*` iPython notebooks. These notebooks contain both code to run (i) generate synthetic data, (ii) run the analyses and (iii) reproduce plots.
