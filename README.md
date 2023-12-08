@@ -1,4 +1,4 @@
-We provide code to reproduce all the experiments presented in "Cross-Study Replicability in Cluster Analysis" (Statist. Sci. 38(2): 303-316 (May 2023). DOI: 10.1214/22-STS871)[https://projecteuclid.org/journals/statistical-science/advance-publication/Cross-Study-Replicability-in-Cluster-Analysis/10.1214/22-STS871.short]. See also https://arxiv.org/pdf/2202.01910.pdf). 
+We provide code to reproduce all the experiments presented in "Cross-Study Replicability in Cluster Analysis" [Statist. Sci. 38(2): 303-316 (May 2023). DOI: 10.1214/22-STS871](https://projecteuclid.org/journals/statistical-science/advance-publication/Cross-Study-Replicability-in-Cluster-Analysis/10.1214/22-STS871.short). See also https://arxiv.org/pdf/2202.01910.pdf). 
 
 # Structure
 
